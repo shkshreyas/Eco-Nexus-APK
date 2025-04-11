@@ -1,8 +1,27 @@
 import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Award, Calendar, MapPin } from 'lucide-react-native';
+import { useAuth } from '@/context/auth';
+import { useState, useEffect } from 'react';
 
 export default function ProfileScreen() {
+  const { user } = useAuth();
+  const [displayName, setDisplayName] = useState('User');
+
+  useEffect(() => {
+    // Extract name from email if no user metadata exists
+    // Format: user's name is the part before @ in the email
+    if (user?.email) {
+      const emailName = user.email.split('@')[0];
+      // Capitalize first letter of each word
+      const formattedName = emailName
+        .split(/[._-]/)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+      setDisplayName(formattedName);
+    }
+  }, [user]);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -11,7 +30,7 @@ export default function ProfileScreen() {
             source={{ uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330' }}
             style={styles.profileImage}
           />
-          <Text style={styles.name}>Sarah Johnson</Text>
+          <Text style={styles.name}>{displayName}</Text>
           <View style={styles.locationContainer}>
             <MapPin size={16} color="#6B7280" />
             <Text style={styles.location}>San Francisco, CA</Text>

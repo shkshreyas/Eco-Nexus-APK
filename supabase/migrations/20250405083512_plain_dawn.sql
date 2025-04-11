@@ -1,5 +1,5 @@
 /*
-  # Initial Schema Setup for EcoVolt
+  # Initial Schema Setup for EcoNexus
 
   1. New Tables
     - profiles

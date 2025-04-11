@@ -1,15 +1,21 @@
 {
   "expo": {
-    "name": "bolt-expo-nativewind",
-    "slug": "bolt-expo-nativewind",
+    "name": "EcoNexus 2.0",
+    "slug": "EcoNexus",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "EcoNexus",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#22C55E"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.EcoNexus.app"
     },
     "web": {
       "bundler": "metro",
@@ -18,10 +24,45 @@
     },
     "plugins": [
       "expo-router",
-      "expo-barcode-scanner"
+      "expo-barcode-scanner",
+      "expo-splash-screen"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "db30c323-744e-46af-97a8-741e9ada9932"
+      }
+    },
+    "android": {
+      "package": "codered.shk.EcoNexus",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#22C55E"
+      },
+      "permissions": [
+        "CAMERA",
+        "INTERNET"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "EcoNexus"
+            }
+          ],
+          "category": [
+            "DEFAULT",
+            "BROWSABLE"
+          ]
+        }
+      ]
     }
   }
 }

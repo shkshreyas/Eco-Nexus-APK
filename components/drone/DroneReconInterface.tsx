@@ -1,580 +1,547 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, TextInput, Alert } from 'react-native';
-import { Drone, Upload, Map, Check, X, Camera } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
-import { Database } from '@/types/supabase';
-
-type DroneScan = Database['public']['Tables']['drone_scans']['Row'];
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  ScrollView,
+  Dimensions,
+} from 'react-native';
+import {
+  Package,
+  Lock,
+  Info,
+  MapPin,
+  Battery,
+  Wifi,
+  AlarmClock,
+} from 'lucide-react-native';
+import { useTheme } from '@/context/theme';
 
 export default function DroneReconInterface() {
-  const [droneScanHistory, setDroneScanHistory] = useState<DroneScan[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showNewScanForm, setShowNewScanForm] = useState(false);
-  
-  // Form state
-  const [missionName, setMissionName] = useState('');
-  const [scanAreaName, setScanAreaName] = useState('');
-  const [latitude, setLatitude] = useState('');
-  const [longitude, setLongitude] = useState('');
-  const [altitude, setAltitude] = useState('');
-  const [findings, setFindings] = useState('');
-
-  useEffect(() => {
-    fetchDroneScans();
-
-    // Set up real-time subscription for drone scans
-    const subscription = supabase
-      .channel('drone_scans_changes')
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'drone_scans' }, 
-        (payload) => {
-          const newScan = payload.new as DroneScan;
-          setDroneScanHistory(prev => [newScan, ...prev]);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const fetchDroneScans = async () => {
-    try {
-      setLoading(true);
-      // In a real app, we'd filter by the current user's ID
-      const { data, error } = await supabase
-        .from('drone_scans')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) {
-        throw error;
-      }
-
-      setDroneScanHistory(data || []);
-    } catch (err) {
-      console.error('Error fetching drone scans:', err);
-      setError('Failed to load drone scan history');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmitScan = async () => {
-    if (!missionName || !scanAreaName || !latitude || !longitude) {
-      Alert.alert('Missing Information', 'Please fill in all required fields');
-      return;
-    }
-
-    try {
-      const lat = parseFloat(latitude);
-      const lng = parseFloat(longitude);
-      
-      if (isNaN(lat) || isNaN(lng)) {
-        Alert.alert('Invalid Coordinates', 'Please enter valid latitude and longitude values');
-        return;
-      }
-
-      const userId = 'current-user-id'; // In a real app, get this from authentication state
-      
-      const newScan = {
-        user_id: userId,
-        mission_name: missionName,
-        scan_area_name: scanAreaName,
-        lat: lat,
-        lng: lng,
-        altitude_meters: altitude ? parseFloat(altitude) : null,
-        image_url: null, // In a real app, we'd handle image upload
-        findings: findings || null
-      };
-
-      const { error } = await supabase
-        .from('drone_scans')
-        .insert([newScan]);
-
-      if (error) {
-        throw error;
-      }
-
-      // Reset form
-      setMissionName('');
-      setScanAreaName('');
-      setLatitude('');
-      setLongitude('');
-      setAltitude('');
-      setFindings('');
-      setShowNewScanForm(false);
-
-      // Show success message
-      Alert.alert('Success', 'Drone scan data saved successfully');
-    } catch (err) {
-      console.error('Error saving drone scan:', err);
-      Alert.alert('Error', 'Failed to save drone scan data');
-    }
-  };
-
-  const renderScanItem = (scan: DroneScan) => (
-    <View key={scan.id} style={styles.scanItem}>
-      <View style={styles.scanHeader}>
-        <View style={styles.missionInfo}>
-          <Text style={styles.missionName}>{scan.mission_name}</Text>
-          <Text style={styles.scanDate}>{new Date(scan.created_at).toLocaleDateString()}</Text>
-        </View>
-        <Drone size={24} color="#6366F1" />
-      </View>
-      
-      <View style={styles.scanDetails}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Area:</Text>
-          <Text style={styles.detailValue}>{scan.scan_area_name}</Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Coordinates:</Text>
-          <Text style={styles.detailValue}>{scan.lat.toFixed(6)}, {scan.lng.toFixed(6)}</Text>
-        </View>
-        
-        {scan.altitude_meters && (
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Altitude:</Text>
-            <Text style={styles.detailValue}>{scan.altitude_meters}m</Text>
-          </View>
-        )}
-      </View>
-      
-      {scan.findings && (
-        <View style={styles.findingsContainer}>
-          <Text style={styles.findingsLabel}>Findings:</Text>
-          <Text style={styles.findingsText}>{scan.findings}</Text>
-        </View>
-      )}
-      
-      {scan.image_url && (
-        <Image 
-          source={{ uri: scan.image_url }} 
-          style={styles.scanImage}
-          resizeMode="cover"
-        />
-      )}
-    </View>
-  );
-
-  const renderNewScanForm = () => (
-    <View style={styles.formContainer}>
-      <View style={styles.formHeader}>
-        <Text style={styles.formTitle}>New Drone Scan</Text>
-        <TouchableOpacity onPress={() => setShowNewScanForm(false)}>
-          <X size={24} color="#6B7280" />
-        </TouchableOpacity>
-      </View>
-      
-      <ScrollView style={styles.formScroll}>
-        <View style={styles.formField}>
-          <Text style={styles.formLabel}>Mission Name *</Text>
-          <TextInput
-            style={styles.formInput}
-            value={missionName}
-            onChangeText={setMissionName}
-            placeholder="Enter mission name"
-          />
-        </View>
-        
-        <View style={styles.formField}>
-          <Text style={styles.formLabel}>Scan Area Name *</Text>
-          <TextInput
-            style={styles.formInput}
-            value={scanAreaName}
-            onChangeText={setScanAreaName}
-            placeholder="Enter scan area name"
-          />
-        </View>
-        
-        <View style={styles.coordinatesContainer}>
-          <View style={[styles.formField, styles.coordinateField]}>
-            <Text style={styles.formLabel}>Latitude *</Text>
-            <TextInput
-              style={styles.formInput}
-              value={latitude}
-              onChangeText={setLatitude}
-              placeholder="37.7749"
-              keyboardType="numeric"
-            />
-          </View>
-          
-          <View style={[styles.formField, styles.coordinateField]}>
-            <Text style={styles.formLabel}>Longitude *</Text>
-            <TextInput
-              style={styles.formInput}
-              value={longitude}
-              onChangeText={setLongitude}
-              placeholder="-122.4194"
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-        
-        <View style={styles.formField}>
-          <Text style={styles.formLabel}>Altitude (meters)</Text>
-          <TextInput
-            style={styles.formInput}
-            value={altitude}
-            onChangeText={setAltitude}
-            placeholder="100"
-            keyboardType="numeric"
-          />
-        </View>
-        
-        <View style={styles.formField}>
-          <Text style={styles.formLabel}>Findings</Text>
-          <TextInput
-            style={[styles.formInput, styles.textArea]}
-            value={findings}
-            onChangeText={setFindings}
-            placeholder="Enter scan findings and observations"
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
-        
-        <View style={styles.imageUploadContainer}>
-          <TouchableOpacity style={styles.imageUploadButton}>
-            <Camera size={20} color="#6366F1" />
-            <Text style={styles.imageUploadText}>Add Scan Image</Text>
-          </TouchableOpacity>
-          <Text style={styles.imageUploadHint}>
-            This would upload a drone scan image in a real app
-          </Text>
-        </View>
-        
-        <View style={styles.formActions}>
-          <TouchableOpacity 
-            style={styles.cancelButton}
-            onPress={() => setShowNewScanForm(false)}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.submitButton}
-            onPress={handleSubmitScan}
-          >
-            <Check size={20} color="#FFFFFF" />
-            <Text style={styles.submitButtonText}>Save Scan</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </View>
-  );
-
-  if (loading && droneScanHistory.length === 0) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading drone scan data...</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
+  const { colors, isDark } = useTheme();
+  const [selectedTab, setSelectedTab] = useState('dashboard');
 
   return (
-    <View style={styles.container}>
-      {showNewScanForm ? (
-        renderNewScanForm()
-      ) : (
-        <>
-          <View style={styles.header}>
-            <Text style={styles.title}>Drone Reconnaissance</Text>
-            <TouchableOpacity 
-              style={styles.newScanButton}
-              onPress={() => setShowNewScanForm(true)}
-            >
-              <Upload size={18} color="#FFFFFF" />
-              <Text style={styles.newScanButtonText}>Log Scan</Text>
-            </TouchableOpacity>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.card }]}>
+        <View style={styles.headerContent}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Drone Recon System
+          </Text>
+          <View style={styles.betaTag}>
+            <Text style={styles.betaText}>PROTOTYPE</Text>
           </View>
-          
-          <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>Drone Scan Data</Text>
-            <Text style={styles.infoText}>
-              View and log drone reconnaissance data for environmental monitoring and deforestation tracking.
+        </View>
+        <Text style={[styles.headerSubtitle, { color: colors.secondaryText }]}>
+          Environmental Monitoring System
+        </Text>
+      </View>
+
+      <ScrollView style={styles.content}>
+        <View style={styles.droneBanner}>
+          <Image
+            source={require('@/assets/images/deforestation-default.jpg')}
+            style={styles.droneImage}
+            resizeMode="cover"
+          />
+          <View
+            style={[
+              styles.droneStatus,
+              {
+                backgroundColor: isDark
+                  ? 'rgba(0,0,0,0.7)'
+                  : 'rgba(255,255,255,0.8)',
+              },
+            ]}
+          >
+            <Text style={[styles.droneStatusText, { color: colors.primary }]}>
+              EcoNexus Forestry Drone
             </Text>
-          </View>
-          
-          {droneScanHistory.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Drone size={48} color="#9CA3AF" />
-              <Text style={styles.emptyText}>No drone scans found</Text>
-              <Text style={styles.emptySubtext}>
-                Start by logging your first drone reconnaissance scan
+            <View style={styles.statusIndicator}>
+              <View
+                style={[styles.statusDot, { backgroundColor: '#10B981' }]}
+              />
+              <Text style={[styles.statusText, { color: colors.text }]}>
+                Prototype Ready
               </Text>
             </View>
-          ) : (
-            <ScrollView style={styles.scanList}>
-              {droneScanHistory.map(renderScanItem)}
-            </ScrollView>
-          )}
-        </>
-      )}
+          </View>
+        </View>
+
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              selectedTab === 'dashboard' && [
+                styles.selectedTab,
+                { borderColor: colors.primary },
+              ],
+            ]}
+            onPress={() => setSelectedTab('dashboard')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                selectedTab === 'dashboard' && { color: colors.primary },
+              ]}
+            >
+              Dashboard
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              selectedTab === 'missions' && [
+                styles.selectedTab,
+                { borderColor: colors.primary },
+              ],
+            ]}
+            onPress={() => setSelectedTab('missions')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                selectedTab === 'missions' && { color: colors.primary },
+              ]}
+            >
+              Missions
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              selectedTab === 'maps' && [
+                styles.selectedTab,
+                { borderColor: colors.primary },
+              ],
+            ]}
+            onPress={() => setSelectedTab('maps')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                selectedTab === 'maps' && { color: colors.primary },
+              ]}
+            >
+              Maps
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {selectedTab === 'dashboard' && (
+          <View style={styles.dashboardContainer}>
+            <View
+              style={[styles.statsContainer, { backgroundColor: colors.card }]}
+            >
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Drone Status
+              </Text>
+
+              <View style={styles.statRow}>
+                <View style={styles.statItem}>
+                  <Battery size={20} color={colors.primary} />
+                  <Text
+                    style={[styles.statLabel, { color: colors.secondaryText }]}
+                  >
+                    Battery
+                  </Text>
+                  <Text style={[styles.statValue, { color: colors.text }]}>
+                    92%
+                  </Text>
+                </View>
+
+                <View style={styles.statItem}>
+                  <Wifi size={20} color={colors.primary} />
+                  <Text
+                    style={[styles.statLabel, { color: colors.secondaryText }]}
+                  >
+                    Signal
+                  </Text>
+                  <Text style={[styles.statValue, { color: colors.text }]}>
+                    Strong
+                  </Text>
+                </View>
+
+                <View style={styles.statItem}>
+                  <AlarmClock size={20} color={colors.primary} />
+                  <Text
+                    style={[styles.statLabel, { color: colors.secondaryText }]}
+                  >
+                    Flight Time
+                  </Text>
+                  <Text style={[styles.statValue, { color: colors.text }]}>
+                    24 min
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View
+              style={[styles.featureCard, { backgroundColor: colors.card }]}
+            >
+              <View style={styles.featureHeader}>
+                <Text style={[styles.featureTitle, { color: colors.text }]}>
+                  Automated Deforestation Detection
+                </Text>
+                <Lock size={18} color="#9CA3AF" />
+              </View>
+              <Text
+                style={[
+                  styles.featureDescription,
+                  { color: colors.secondaryText },
+                ]}
+              >
+                AI-powered analysis identifies illegal logging and forest
+                degradation in real-time.
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.featureButton,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
+                <Text style={styles.featureButtonText}>Upgrade to Access</Text>
+              </TouchableOpacity>
+              <View style={styles.comingSoonBadge}>
+                <Text style={styles.comingSoonText}>Coming Soon</Text>
+              </View>
+            </View>
+
+            <View
+              style={[styles.featureCard, { backgroundColor: colors.card }]}
+            >
+              <View style={styles.featureHeader}>
+                <Text style={[styles.featureTitle, { color: colors.text }]}>
+                  Wildfire Early Warning System
+                </Text>
+                <Lock size={18} color="#9CA3AF" />
+              </View>
+              <Text
+                style={[
+                  styles.featureDescription,
+                  { color: colors.secondaryText },
+                ]}
+              >
+                Thermal imaging detects hotspots before they develop into
+                dangerous wildfires.
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.featureButton,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
+                <Text style={styles.featureButtonText}>Upgrade to Access</Text>
+              </TouchableOpacity>
+              <View style={styles.comingSoonBadge}>
+                <Text style={styles.comingSoonText}>Coming Soon</Text>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.prototypeNoteContainer,
+                { backgroundColor: isDark ? colors.elevated : '#F3F4F6' },
+              ]}
+            >
+              <Info size={20} color={colors.primary} />
+              <Text style={[styles.prototypeNote, { color: colors.text }]}>
+                This is a prototype demonstration of the EcoNexus Drone Recon
+                System. Actual functionality will be implemented in future
+                releases.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {selectedTab === 'missions' && (
+          <View style={styles.missionContainer}>
+            <View
+              style={[styles.missionSection, { backgroundColor: colors.card }]}
+            >
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Planned Missions
+              </Text>
+              <Text
+                style={[styles.emptyStateText, { color: colors.secondaryText }]}
+              >
+                No missions scheduled for prototype version
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.blockedButton,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(239, 68, 68, 0.2)'
+                      : '#FEE2E2',
+                  },
+                ]}
+              >
+                <Lock size={16} color={isDark ? '#FCA5A5' : '#B91C1C'} />
+                <Text
+                  style={{
+                    color: isDark ? '#FCA5A5' : '#B91C1C',
+                    marginLeft: 8,
+                  }}
+                >
+                  Prototype Only
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {selectedTab === 'maps' && (
+          <View style={styles.mapsContainer}>
+            <View
+              style={[styles.mapPlaceholder, { backgroundColor: colors.card }]}
+            >
+              <MapPin size={40} color={colors.primary} />
+              <Text style={[styles.mapPlaceholderText, { color: colors.text }]}>
+                Mapping Interface
+              </Text>
+              <Text
+                style={[
+                  styles.mapPlaceholderSubtext,
+                  { color: colors.secondaryText },
+                ]}
+              >
+                Available in full release version
+              </Text>
+            </View>
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
+const { width } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  title: {
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
+    fontWeight: 'bold',
   },
-  newScanButton: {
+  headerSubtitle: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  betaTag: {
+    backgroundColor: '#FCD34D',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  betaText: {
+    color: '#92400E',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  content: {
+    flex: 1,
+  },
+  droneBanner: {
+    width: '100%',
+    height: 200,
+    position: 'relative',
+  },
+  droneImage: {
+    width: '100%',
+    height: '100%',
+  },
+  droneStatus: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  droneStatusText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  statusIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    marginTop: 4,
   },
-  newScanButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    marginLeft: 6,
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
   },
-  infoBox: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1E40AF',
-    marginBottom: 4,
-  },
-  infoText: {
+  statusText: {
     fontSize: 14,
-    color: '#1E40AF',
-    lineHeight: 20,
   },
-  loadingText: {
-    fontSize: 16,
-    color: '#4B5563',
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#EF4444',
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4B5563',
+  tabsContainer: {
+    flexDirection: 'row',
     marginTop: 16,
-    marginBottom: 8,
+    marginHorizontal: 16,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  scanList: {
+  tabButton: {
     flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
-  scanItem: {
-    backgroundColor: '#F9FAFB',
+  selectedTab: {
+    borderBottomWidth: 2,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  dashboardContainer: {
+    padding: 16,
+  },
+  statsContainer: {
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
-  scanHeader: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  statRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  statItem: {
     alignItems: 'center',
-    marginBottom: 12,
   },
-  missionInfo: {
-    flex: 1,
-  },
-  missionName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  scanDate: {
+  statLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    marginTop: 4,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
     marginTop: 2,
   },
-  scanDetails: {
-    marginBottom: 12,
+  featureCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  detailRow: {
+  featureHeader: {
     flexDirection: 'row',
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  detailLabel: {
-    fontSize: 14,
-    color: '#4B5563',
-    fontWeight: '500',
-    width: 100,
-  },
-  detailValue: {
-    fontSize: 14,
-    color: '#111827',
+  featureTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    flexWrap: 'wrap',
     flex: 1,
+    marginRight: 8,
   },
-  findingsContainer: {
-    marginBottom: 12,
-  },
-  findingsLabel: {
+  featureDescription: {
     fontSize: 14,
-    color: '#4B5563',
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  findingsText: {
-    fontSize: 14,
-    color: '#111827',
     lineHeight: 20,
+    marginBottom: 12,
   },
-  scanImage: {
-    width: '100%',
-    height: 160,
+  featureButton: {
     borderRadius: 8,
-  },
-  formContainer: {
-    flex: 1,
-  },
-  formHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  formTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  formScroll: {
-    flex: 1,
-  },
-  formField: {
-    marginBottom: 16,
-  },
-  formLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#4B5563',
-    marginBottom: 6,
-  },
-  formInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
+    paddingVertical: 8,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
-  },
-  coordinatesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  coordinateField: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  imageUploadContainer: {
-    marginBottom: 16,
     alignItems: 'center',
   },
-  imageUploadButton: {
+  featureButtonText: {
+    color: 'white',
+    fontWeight: '500',
+  },
+  comingSoonBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderBottomLeftRadius: 8,
+  },
+  comingSoonText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  missionContainer: {
+    padding: 16,
+  },
+  missionSection: {
+    borderRadius: 12,
+    padding: 16,
+  },
+  emptyStateText: {
+    textAlign: 'center',
+    marginVertical: 24,
+  },
+  blockedButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#6366F1',
-    borderStyle: 'dashed',
+    padding: 10,
     borderRadius: 8,
-    paddingVertical: 16,
-    width: '100%',
-  },
-  imageUploadText: {
-    fontSize: 14,
-    color: '#6366F1',
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-  imageUploadHint: {
-    fontSize: 12,
-    color: '#6B7280',
     marginTop: 8,
   },
-  formActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 16,
-    marginBottom: 24,
+  mapsContainer: {
+    padding: 16,
   },
-  cancelButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  cancelButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  submitButton: {
-    flexDirection: 'row',
+  mapPlaceholder: {
+    borderRadius: 12,
+    padding: 24,
     alignItems: 'center',
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    justifyContent: 'center',
+    height: 200,
   },
-  submitButtonText: {
+  mapPlaceholderText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 12,
+  },
+  mapPlaceholderSubtext: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginLeft: 6,
+    marginTop: 4,
   },
-}); 
+  prototypeNoteContainer: {
+    flexDirection: 'row',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 24,
+    alignItems: 'flex-start',
+  },
+  prototypeNote: {
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 20,
+  },
+});

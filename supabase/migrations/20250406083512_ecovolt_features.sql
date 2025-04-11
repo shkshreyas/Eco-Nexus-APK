@@ -1,5 +1,5 @@
 /*
-  # EcoVolt 2.0 Features Schema
+  # EcoNexus 2.0 Features Schema
 
   1. New Tables
     - disaster_zones
